@@ -17,6 +17,7 @@ RUN curl -fsSL https://deno.land/install.sh -o /tmp/install-deno.sh \
 WORKDIR /app
 COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.txt
-COPY dc.py ./
+COPY dc.py panel.py ./
+COPY site/ ./site/
 
 CMD ["python", "dc.py"]
