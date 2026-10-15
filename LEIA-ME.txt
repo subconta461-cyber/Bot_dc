@@ -1,29 +1,40 @@
-UMINIDA — SEU CANTINHO DE MÚSICA
+UMINIDA NO RAILWAY — BOT E PAINEL ONLINE
 
-1. Mantenha dc.py, panel.py e a pasta site juntos, na pasta My_Bot.
-2. Inicie pelo arquivo "Iniciar Uminida.bat". Ele seleciona um dos
-   ambientes Python de 64 bits já instalados com as dependências do bot.
-3. Abra http://127.0.0.1:8765 no navegador deste PC.
-   Você também pode usar o arquivo "Abrir painel.bat".
-4. No painel, escolha o servidor, o canal de voz e o canal de mensagens.
-5. Entre no canal pelo Discord e adicione uma música por nome ou link.
+1. Extraia este ZIP. Envie os arquivos da pasta Uminida-Railway à raiz
+   do GitHub, ao lado de dc.py. Preserve a pasta site com os quatro arquivos.
+   Os arquivos devem substituir os existentes, sem criar outra subpasta.
 
-CONTROLES
-Pausar/continuar, pular, repetir, volume, adicionar músicas,
-remover e mover itens da fila, limpar fila e encerrar sessão.
-A música toca no Discord. Os controles do Discord continuam funcionando.
+2. No Railway > Variables, mantenha DISCORD_TOKEN com o token atual e crie
+   PANEL_PASSWORD com uma senha forte, única, de pelo menos 16 caracteres.
+   Não envie essa senha nem o token ao GitHub ou ao chat.
+   FFMPEG_PATH, se existir, deve ser /usr/bin/ffmpeg.
 
-O painel recebe atualizações a cada 2 segundos. Ele funciona só neste PC,
-enquanto o bot estiver aberto. Não é necessário configurar login ou
-colar o token do Discord no site. Não abra a porta 8765 no roteador.
+3. Em Settings > Networking > Public Networking, use Generate Domain.
+   O painel usa RAILWAY_PUBLIC_DOMAIN automaticamente. Se usar um domínio
+   próprio, defina PANEL_PUBLIC_URL=https://seu-dominio, sem caminho.
+   Não defina PORT manualmente: a aplicação usa o valor do Railway.
 
-O canal de voz do bot é preservado se ele já estiver tocando.
-A seleção de canais fica salva apenas no navegador deste PC.
-O botão Encerrar sessão para a música, limpa a fila e desconecta o bot.
+4. Faça deploy do commit novo. O railway.toml configura Dockerfile,
+   comando de início e healthcheck. Confira se o Railway está ligado
+   ao repositório Bot_dc, branch main, e raiz /.
 
-Se o painel disser "Bot desconectado", confira o console do bot.
-Se a porta 8765 estiver ocupada, feche a outra instância do bot/painel.
+5. Abra o domínio HTTPS gerado em uma janela privativa do navegador.
+   A caixa de login do navegador pedirá:
+   Usuário: uminida
+   Senha: o valor que VOCÊ colocou em PANEL_PASSWORD.
+   Não é o token do Discord. Para sair, feche a janela privativa.
 
-DEPENDÊNCIAS
-O painel usa aiohttp, que já acompanha o discord.py instalado.
-Não precisa instalar Node.js ou dependências de frontend para usar.
+6. Escolha os canais no painel, entre na chamada do Discord e adicione música.
+   Deixe somente uma instância do bot: encerre a versão do PC ao usar Railway.
+
+O pacote não contém .env nem credenciais. O Dockerfile copia apenas arquivos
+necessários, instala FFmpeg/Deno e verifica os arquivos do painel no build.
+O acesso aos controles exige senha no Railway; a versão local continua local.
+A rota /healthz mostra apenas se o bot conectou, sem dados dos servidores.
+
+Se o novo token foi enviado ao .env público anteriormente, redefina esse token
+no Discord antes do deploy e remova .env do repositório.
+
+LIMITES DE VALIDAÇÃO
+Testes locais de rotas e autenticação. A publicação real e a reprodução de voz
+no Railway precisam ser verificadas no seu serviço após o upload.

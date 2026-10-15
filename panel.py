@@ -2,12 +2,16 @@
 import asyncio
 import hmac
 import logging
+import os
 import secrets
+import time
+from collections import deque
+from urllib.parse import urlsplit
 from pathlib import Path
 from types import SimpleNamespace
 
 import discord
-from aiohttp import web
+from aiohttp import web, BasicAuth
 
 log = logging.getLogger("uminida.painel")
 ROOT = Path(__file__).parent / "site"
@@ -36,14 +40,44 @@ def track_data(track):
 
 def create_app(bot, runtime):
     token = secrets.token_urlsafe(32)
-    origin = "http://127.0.0.1:8765"
+    public = bool(os.getenv("PORT") or os.getenv("RAILWAY_ENVIRONMENT_ID"))
+    domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+    origin = (os.getenv("PANEL_PUBLIC_URL", "").strip() or ("https://" + domain if domain else "")) if public else "http://127.0.0.1:8765"
+    origin = origin.rstrip("/")
+    if public and origin and (urlsplit(origin).scheme != "https" or not urlsplit(origin).netloc or urlsplit(origin).path):
+        raise RuntimeError("PANEL_PUBLIC_URL deve ser um endereço HTTPS sem caminho.")
+    password = os.getenv("PANEL_PASSWORD", "")
+    if public and len(password) < 16:
+        raise RuntimeError("Configure PANEL_PASSWORD nas Variables do Railway, com pelo menos 16 caracteres.")
+    failures = deque(maxlen=30)
 
     @web.middleware
     async def guard(request, handler):
-        if request.host != "127.0.0.1:8765":
-            raise web.HTTPForbidden(text="Abra http://127.0.0.1:8765 no seu PC.")
+        if request.path == "/healthz" and request.method == "GET":
+            return web.json_response({"ready": bot.is_ready()}, status=200 if bot.is_ready() else 503)
+        expected_host = urlsplit(origin).netloc
+        if public and not expected_host:
+            return web.Response(status=503, text="Gere um domínio no Railway e faça novo deploy. Para domínio próprio, configure PANEL_PUBLIC_URL.")
+        if request.host != expected_host:
+            raise web.HTTPForbidden(text="Use o endereço configurado para o painel da Uminida.")
         if request.headers.get("Origin") not in (None, origin):
             raise web.HTTPForbidden(text="Origem não permitida.")
+        if public:
+            now = time.monotonic()
+            while failures and now - failures[0] > 60:
+                failures.popleft()
+            authorized = False
+            try:
+                auth = BasicAuth.decode(request.headers.get("Authorization", ""), encoding="utf-8")
+                authorized = hmac.compare_digest(auth.login.encode(), b"uminida") and hmac.compare_digest(auth.password.encode(), password.encode())
+            except (ValueError, UnicodeError):
+                pass
+            if not authorized:
+                if len(failures) >= 20:
+                    return web.Response(status=429, text="Muitas tentativas. Aguarde um minuto.", headers={"Retry-After": "60", "Cache-Control": "no-store"})
+                if request.headers.get("Authorization"):
+                    failures.append(now)
+                return web.Response(status=401, text="Entre com o usuário uminida e a senha PANEL_PASSWORD.", headers={"WWW-Authenticate": 'Basic realm="Uminida", charset="UTF-8"', "Cache-Control": "no-store"})
         if request.method != "GET" and not hmac.compare_digest(request.headers.get("X-Uminida-Key", ""), token):
             return web.json_response({"error": "Recarregue o painel para continuar."}, status=403)
         try:
@@ -63,6 +97,9 @@ def create_app(bot, runtime):
 
     async def index(request):
         html = (ROOT / "index.html").read_text(encoding="utf-8").replace("__UMINIDA_KEY__", token)
+        if public:
+            html = html.replace("No seu PC", "Painel online").replace("O painel controla a Uminida neste PC.", "O painel controla a Uminida no Railway.")
+            html = html.replace("Este painel funciona enquanto o bot está aberto no seu PC. Para abrir de novo: http://127.0.0.1:8765", "Seu painel online. Use o usuário uminida e a senha definida no Railway. Para encerrar o acesso, feche a janela privativa do navegador.")
         return web.Response(text=html, content_type="text/html")
 
     async def asset(request):
@@ -218,13 +255,18 @@ def create_app(bot, runtime):
 
 
 async def start(bot, runtime):
+    public = bool(os.getenv("PORT") or os.getenv("RAILWAY_ENVIRONMENT_ID"))
+    host = "0.0.0.0" if public else "127.0.0.1"
+    port = int(os.getenv("PORT", "8765"))
     runner = web.AppRunner(create_app(bot, runtime), access_log=None)
     await runner.setup()
     try:
-        await web.TCPSite(runner, "127.0.0.1", 8765).start()
+        await web.TCPSite(runner, host, port).start()
     except OSError:
         await runner.cleanup()
-        log.exception("Não consegui abrir o painel na porta 8765. O bot continua funcionando.")
+        if public:
+            raise
+        log.exception("Não consegui abrir o painel local. O bot continua funcionando.")
         return None
-    log.info("Painel da Uminida: http://127.0.0.1:8765")
+    log.info("Painel da Uminida iniciado em %s:%s", host, port)
     return runner
