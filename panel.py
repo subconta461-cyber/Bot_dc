@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import discord
 from aiohttp import web, BasicAuth
+from branding import message_kwargs
 
 log = logging.getLogger("uminida.painel")
 ROOT = Path(__file__).parent / "site"
@@ -26,8 +27,9 @@ class PanelContext:
     def voice_client(self):
         return self.guild.voice_client
 
-    async def send(self, *args, **kwargs):
-        return await self.channel.send(*args, **kwargs)
+    async def send(self, content=None, **kwargs):
+        payload = message_kwargs(content, embed=kwargs.pop("embed", None), embeds=kwargs.pop("embeds", None))
+        return await self.channel.send(**payload, **kwargs)
 
 
 def track_data(track):

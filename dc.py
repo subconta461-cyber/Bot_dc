@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import panel
 from moderation import Moderation
+from branding import UminidaContext, signed, message_kwargs, card
 
 import discord
 from discord.ext import commands
@@ -66,7 +67,7 @@ class MusicControls(discord.ui.View):
         channel = getattr(getattr(interaction.user, "voice", None), "channel", None)
         if player.task.done() or player.controls is not self or not voice or channel != voice.channel:
             await interaction.response.send_message(
-                "Entre no canal da Uminida e use o cartão da música atual. 💜", ephemeral=True)
+                **message_kwargs("Entre no canal da Uminida e use o cartão da música atual. 💜"), ephemeral=True)
             return False
         return True
 
@@ -99,7 +100,7 @@ class MusicControls(discord.ui.View):
         lines = [f"{i}. {discord.utils.escape_markdown(t.title)[:100]}"
                  for i, t in enumerate(tracks[:10], 1)]
         await interaction.response.send_message(
-            "**Fila da Uminida 💜**\n" + ("\n".join(lines) or "Bora adicionar uma música? Use !p nome ou link."),
+            **message_kwargs("**Fila da Uminida 💜**\n" + ("\n".join(lines) or "Bora adicionar uma música? Use !p nome ou link.")),
             ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
@@ -121,7 +122,7 @@ def music_embed(player):
     embed.add_field(name="Repetição", value="Ligada 🔁" if player.repeat else "Desligada")
     embed.add_field(name="Pedido por", value=track.requester[:100] or "Alguém do servidor")
     embed.set_footer(text="Bora ouvir alguma coisa? 💜 • !p nome ou link")
-    return embed
+    return signed(embed)
 
 
 class Player:
@@ -241,11 +242,27 @@ class Player:
 
 
 class UminidaBot(commands.Bot):
+    async def get_context(self, origin, *, cls=UminidaContext):
+        return await super().get_context(origin, cls=cls)
+
     async def setup_hook(self):
         await self.add_cog(Moderation(self))
         self.panel_runner = await panel.start(self, globals())
+        self.command_sync_task = asyncio.create_task(self.sync_commands())
+
+    async def sync_commands(self):
+        await self.wait_until_ready()
+        try:
+            synced = await self.tree.sync()
+            log.info("Comandos com / sincronizados: %s", len(synced))
+        except discord.HTTPException:
+            log.exception("Não consegui sincronizar os comandos com /. Os comandos com ! continuam disponíveis.")
 
     async def close(self):
+        sync_task = getattr(self, "command_sync_task", None)
+        if sync_task:
+            sync_task.cancel()
+            await asyncio.gather(sync_task, return_exceptions=True)
         runner = getattr(self, "panel_runner", None)
         if runner:
             await runner.cleanup()
@@ -285,7 +302,7 @@ def active(ctx):
     return player
 
 
-@bot.command(aliases=["play"])
+@bot.hybrid_command(aliases=["play"])
 async def p(ctx, *, query: str):
     """Busca e adiciona uma música à fila."""
     same_channel(ctx)
@@ -313,7 +330,7 @@ async def p(ctx, *, query: str):
     await ctx.send(f"✅ Na fila: {discord.utils.escape_markdown(track.title)[:250]}")
 
 
-@bot.command(aliases=["repeat"])
+@bot.hybrid_command(aliases=["repeat"])
 async def r(ctx):
     player = active(ctx)
     player.repeat = not player.repeat
@@ -321,7 +338,7 @@ async def r(ctx):
     await ctx.send(f"🔁 Repetição da música atual {'ativada' if player.repeat else 'desativada'}.")
 
 
-@bot.command(aliases=["skip"])
+@bot.hybrid_command(aliases=["skip"])
 async def pular(ctx):
     player = active(ctx)
     if not player.current or not (ctx.voice_client.is_playing() or ctx.voice_client.is_paused()):
@@ -332,7 +349,7 @@ async def pular(ctx):
     await ctx.send("⏭️ Música pulada.")
 
 
-@bot.command(aliases=["pause"])
+@bot.hybrid_command(aliases=["pause"])
 async def pausar(ctx):
     player = active(ctx)
     ctx.voice_client.pause()
@@ -340,7 +357,7 @@ async def pausar(ctx):
     await ctx.send("⏸️ Reprodução pausada.")
 
 
-@bot.command(aliases=["resume"])
+@bot.hybrid_command(aliases=["resume"])
 async def continuar(ctx):
     player = active(ctx)
     ctx.voice_client.resume()
@@ -348,7 +365,7 @@ async def continuar(ctx):
     await ctx.send("▶️ Reprodução retomada.")
 
 
-@bot.command(aliases=["queue"])
+@bot.hybrid_command(aliases=["queue"])
 async def fila(ctx):
     player = active(ctx)
     lines = [f"{i}. {discord.utils.escape_markdown(t.title)[:100]}"
@@ -359,7 +376,7 @@ async def fila(ctx):
                    + (f"\n… {len(player.queue) - 15} outras músicas." if len(player.queue) > 15 else ""))
 
 
-@bot.command()
+@bot.hybrid_command()
 async def volume(ctx, valor: int):
     player = active(ctx)
     if not 0 <= valor <= 100:
@@ -372,7 +389,7 @@ async def volume(ctx, valor: int):
     await ctx.send(f"🔊 Volume: {valor}%")
 
 
-@bot.command(aliases=["stop", "sair"])
+@bot.hybrid_command(aliases=["stop", "sair"])
 async def parar(ctx):
     player = active(ctx)
     player.queue.clear()
@@ -384,19 +401,19 @@ async def parar(ctx):
     await ctx.send("⏹️ Reprodução encerrada e fila limpa. Saí do canal.")
 
 
-@bot.command()
+@bot.hybrid_command()
 async def ping(ctx):
     await ctx.send(f"🏓 {round(bot.latency * 1000)} ms")
 
 
-@bot.command(aliases=["help", "comandos"])
+@bot.hybrid_command(aliases=["help", "comandos"])
 async def ajuda(ctx):
-    await ctx.send("**Comandos**\n!p <nome ou URL> — tocar/adicionar à fila\n"
-                   "!r — ligar/desligar repetição da música atual\n"
-                   "!pular — próxima música, mesmo com repetição ligada\n"
-                   "!pausar / !continuar — pausar/retomar\n!fila — ver músicas\n"
-                   "!volume <0–100> — ajustar volume\n!parar — limpar fila e sair\n"
-                   "!ping — latência\n!ajudamod — comandos de moderação\n!ajuda — esta mensagem")
+    embed = card("Uminida • Central de ajuda", "Seu cantinho de música e moderação. 💜\nUse **/** para preencher os campos ou **!** para digitar.")
+    embed.add_field(name="🎶 Começar a ouvir", value="`!p nome ou link` — adicionar uma música\n`!fila` — consultar a fila", inline=False)
+    embed.add_field(name="🎛️ Controlar o som", value="`!pausar` / `!continuar` — pausar e retomar\n`!pular` — próxima música\n`!r` — repetir a música atual\n`!volume 50` — volume entre 0 e 100\n`!parar` — limpar a fila e sair", inline=False)
+    embed.add_field(name="🛡️ Cuidar do servidor", value="`!ajudamod` — ações, advertências e registros\nOs comandos respeitam suas permissões e os cargos.", inline=False)
+    embed.add_field(name="✨ Utilidades", value="`!ping` — latência\n`!ajuda` — esta central", inline=False)
+    await ctx.send(embed=embed)
 
 
 @bot.event
@@ -436,3 +453,4 @@ if __name__ == "__main__":
     if not shutil.which(os.getenv("FFMPEG_PATH") or "ffmpeg"):
         raise SystemExit("FFmpeg não encontrado. Instale-o ou configure FFMPEG_PATH no .env.")
     bot.run(token)
+

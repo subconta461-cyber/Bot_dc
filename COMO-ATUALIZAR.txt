@@ -1,41 +1,76 @@
-UMINIDA — MODERAÇÃO
+UMINIDA COMPLETA — BY: MT - X-X
 
-Atualização preparada a partir do commit a50630b do Bot_dc.
+ASSINATURA
+Todas as respostas do bot usam cartões com o rodapé:
+✦ Uminida | By: Mt - X-x | 💜
+Inclui música, moderação, confirmações, avisos, erros e respostas privadas.
 
-1. Extraia o ZIP e envie dc.py, moderation.py e Dockerfile para a raiz do
-   repositório Bot_dc, substituindo os arquivos de mesmo nome.
-2. Mantenha panel.py, railway.toml, requirements.txt e a pasta site existentes.
-3. Salve o commit e acompanhe o novo deploy no Railway.
-4. No Discord, dê ao cargo da Uminida somente as permissões necessárias:
-   Banir membros, Expulsar membros, Moderar membros, Gerenciar mensagens,
-   Ler histórico de mensagens, Ver canal e Enviar mensagens.
-   Posicione o cargo acima das pessoas que ela poderá moderar.
-   Não é necessário dar Administrador.
+ATUALIZAR
+1. Extraia o ZIP e envie os arquivos e a pasta site para a RAIZ do Bot_dc
+   no GitHub, substituindo os de mesmo nome. Não envie o próprio ZIP.
+   Não crie outra pasta acima de dc.py.
+2. Preserve no Railway DISCORD_TOKEN, PANEL_PASSWORD e o domínio já configurado.
+3. Para salvar avisos e configurações entre deploys, adicione um Volume
+   conectado ao serviço Bot_dc com Mount Path /data.
+   Railway: clique com o botão direito no serviço > Attach Volume,
+   ou use New/Create > Volume e conecte ao Bot_dc; defina /data na montagem.
+   O código usa RAILWAY_VOLUME_MOUNT_PATH automaticamente.
+   Criar somente uma variável /data não cria o volume.
+   Sem volume, música/moderação continuam disponíveis, mas os comandos de
+   advertências e configuração de logs explicarão como ativar a persistência.
+4. Faça deploy do commit novo. Mantenha uma réplica.
+5. Confira no log: "Comandos com / sincronizados: 21".
+   Os comandos globais podem levar algum tempo para aparecer no Discord.
+   Se não aparecerem, atualize o Discord. Confira também se a instalação do
+   aplicativo no servidor inclui os escopos bot e applications.commands.
+6. No servidor, use /configlogs para escolher seu canal de registros.
+   Ou digite: !configlogs #logs
 
-COMANDOS
-!ban @pessoa motivo       — pede confirmação por botão; expira em 30 segundos.
-!kick @pessoa motivo      — expulsa imediatamente.
-!timeout @pessoa 10m motivo — aplica timeout imediatamente.
-!limpar 20                — examina as 20 mensagens anteriores ao comando e
-                            apaga as que não estão fixadas e têm menos de 14 dias.
-!ajudamod                — ajuda com permissões e exemplos.
+PERMISSÕES
+O cargo Uminida precisa de Ver canal, Enviar mensagens e Inserir links.
+Para as ações: Banir membros, Expulsar membros, Moderar membros,
+Gerenciar mensagens e Ler histórico de mensagens, conforme o uso.
+Posicione o cargo Uminida acima dos cargos que ela poderá moderar.
+Não é necessário dar Administrador.
+Os moderadores também precisam da permissão correspondente.
+Configurar logs exige Gerenciar servidor. Advertências exigem Moderar membros.
+Escolha um canal de logs visível somente para a equipe, se desejar.
 
-Tempos aceitos: 30s, 10m, 2h, 1d. Limite do timeout: 28 dias.
-Limpeza: entre 1 e 100 mensagens; pode apagar menos se houver itens preservados.
-Somente o autor do comando pode confirmar/cancelar o próprio banimento.
-O banimento preserva o histórico de mensagens da pessoa.
+COMANDOS (DISPONÍVEIS COM ! E /)
+!ban @pessoa motivo
+!kick @pessoa motivo
+!timeout @pessoa 10m motivo
+!untimeout @pessoa motivo
+!unban ID_NUMERICO motivo
+!limpar 20
+!avisar @pessoa motivo
+!avisos @pessoa [página]
+!removeraviso número motivo
+!configlogs #canal
+!ajudamod
+!ajuda
 
-PROTEÇÕES
-Cada moderador precisa da permissão do comando, e o bot também.
-Não é possível moderar a si mesmo, a Uminida nem o dono do servidor.
-O alvo deve ter cargo inferior ao do moderador e ao da Uminida;
-o dono do servidor pode moderar cargos inferiores ao do bot.
-Timeout não pode ser aplicado a administradores.
-O banimento reconsulta os membros e verifica permissões ao confirmar.
-As ações incluem o ID do moderador e o motivo no Registro de auditoria do Discord.
+Música: !p, !pausar, !continuar, !pular, !r, !fila, !volume, !parar, !ping.
+Os aliases antigos continuam disponíveis com !. Para /, use os nomes principais.
+
+COMPORTAMENTO
+Banir, expulsar e limpar pedem confirmação de quem executou o comando,
+com prazo de 30 segundos. Cargos e permissões são reavaliados ao confirmar.
+Limpeza seleciona até 100 mensagens anteriores ao pedido e mostra quantas
+serão apagadas. Preserva fixadas, mensagens antigas e novas após o pedido.
+Não existe desfazer limpeza nem desfazer expulsão; unban permite novo convite,
+e untimeout encerra o silêncio temporário.
+Advertências ficam isoladas por servidor e pessoa; removeraviso arquiva o
+registro em vez de apagar a trilha do moderador e do motivo.
+Os registros vão ao canal escolhido. Falha de envio não repete a ação.
+Ban/kick/timeout/unban/untimeout/limpeza também têm motivo no audit log do Discord.
+Slash de avisos e configurações são respostas privadas; com prefixo !, as
+respostas ficam no canal onde o comando foi digitado.
+Não há punições automáticas por número de avisos.
 
 VALIDAÇÃO
-Testes locais com membros e chamadas simulados, sem banir, expulsar,
-silenciar ou apagar mensagens de ninguém no servidor real.
-A publicação no Railway deve ser feita após o upload dos três arquivos.
-Este pacote não contém token, senha, .env nem dependências novas.
+Testes locais simulados de segurança, permissões, confirmação, assinatura,
+persistência SQLite, isolamento entre servidores e integração do painel.
+Não executamos ações reais em membros, nem publicamos no Railway nesta etapa.
+Este pacote não contém token, senha, .env ou dados do servidor.
+O bloqueio do YouTube detectado anteriormente não é alterado por esta versão.

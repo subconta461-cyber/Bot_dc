@@ -17,7 +17,7 @@ RUN curl -fsSL https://deno.land/install.sh -o /tmp/install-deno.sh \
 WORKDIR /app
 COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.txt
-COPY dc.py panel.py moderation.py ./
+COPY dc.py panel.py moderation.py branding.py mod_store.py ./
 COPY site/ ./site/
 RUN python -c "import dc, panel; from pathlib import Path; assert all((Path('site') / p).is_file() for p in ('index.html','app.js','style.css','moon.svg'))"
 
