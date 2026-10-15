@@ -1,0 +1,29 @@
+UMINIDA — SEU CANTINHO DE MÚSICA
+
+1. Mantenha dc.py, panel.py e a pasta site juntos, na pasta My_Bot.
+2. Inicie pelo arquivo "Iniciar Uminida.bat". Ele seleciona um dos
+   ambientes Python de 64 bits já instalados com as dependências do bot.
+3. Abra http://127.0.0.1:8765 no navegador deste PC.
+   Você também pode usar o arquivo "Abrir painel.bat".
+4. No painel, escolha o servidor, o canal de voz e o canal de mensagens.
+5. Entre no canal pelo Discord e adicione uma música por nome ou link.
+
+CONTROLES
+Pausar/continuar, pular, repetir, volume, adicionar músicas,
+remover e mover itens da fila, limpar fila e encerrar sessão.
+A música toca no Discord. Os controles do Discord continuam funcionando.
+
+O painel recebe atualizações a cada 2 segundos. Ele funciona só neste PC,
+enquanto o bot estiver aberto. Não é necessário configurar login ou
+colar o token do Discord no site. Não abra a porta 8765 no roteador.
+
+O canal de voz do bot é preservado se ele já estiver tocando.
+A seleção de canais fica salva apenas no navegador deste PC.
+O botão Encerrar sessão para a música, limpa a fila e desconecta o bot.
+
+Se o painel disser "Bot desconectado", confira o console do bot.
+Se a porta 8765 estiver ocupada, feche a outra instância do bot/painel.
+
+DEPENDÊNCIAS
+O painel usa aiohttp, que já acompanha o discord.py instalado.
+Não precisa instalar Node.js ou dependências de frontend para usar.
