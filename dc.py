@@ -1,6 +1,7 @@
 """Bot de música: execute python dc.py depois de configurar .env."""
 import asyncio
 import logging
+import math
 import os
 import shutil
 from dataclasses import dataclass, field
@@ -412,7 +413,21 @@ async def ajuda(ctx):
     embed.add_field(name="🎶 Começar a ouvir", value="`!p nome ou link` — adicionar uma música\n`!fila` — consultar a fila", inline=False)
     embed.add_field(name="🎛️ Controlar o som", value="`!pausar` / `!continuar` — pausar e retomar\n`!pular` — próxima música\n`!r` — repetir a música atual\n`!volume 50` — volume entre 0 e 100\n`!parar` — limpar a fila e sair", inline=False)
     embed.add_field(name="🛡️ Cuidar do servidor", value="`!ajudamod` — ações, advertências e registros\nOs comandos respeitam suas permissões e os cargos.", inline=False)
-    embed.add_field(name="✨ Utilidades", value="`!ping` — latência\n`!ajuda` — esta central", inline=False)
+    embed.add_field(name="✨ Utilidades", value="`!apresentação` — conheça a Uminida\n`!ping` — latência\n`!ajuda` — esta central", inline=False)
+    await ctx.send(embed=embed)
+
+
+@bot.hybrid_command(name="apresentacao", aliases=["apresentação", "sobre"], description="Conheça a Uminida, veja o ping atual e os comandos de ajuda.")
+async def apresentacao(ctx):
+    latency = bot.latency
+    ping_text = f"**{round(latency * 1000)} ms**" if math.isfinite(latency) else "Medindo minha conexão…"
+    embed = card("Oi, eu sou a Uminida! 💜", "Seu cantinho de música e uma ajudinha para cuidar do servidor.\nCriada por **Mt - X-x**, estou pronta para acompanhar a resenha. ✨")
+    if bot.user:
+        embed.set_thumbnail(url=bot.user.display_avatar.url)
+    embed.add_field(name="🎶 Eu cuido da trilha sonora", value="Busco músicas, organizo a fila e deixo os controles na sua mão.\nComece com **`!p nome ou link`**.", inline=False)
+    embed.add_field(name="🛡️ Também ajudo na moderação", value="Banimentos, expulsões, timeout, advertências e registros — sempre respeitando as permissões e os cargos.", inline=False)
+    embed.add_field(name="🏓 Meu ping agora", value=ping_text + "\nLatência da minha conexão com o Discord.", inline=False)
+    embed.add_field(name="📖 Quer conhecer meus comandos?", value="**`!ajuda`** ou **`/ajuda`** — central de ajuda\n**`!ajudamod`** ou **`/ajudamod`** — moderação\n**`!ping`** ou **`/ping`** — consultar o ping novamente", inline=False)
     await ctx.send(embed=embed)
 
 
