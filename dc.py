@@ -3,8 +3,11 @@ import asyncio
 import logging
 import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from collections import deque
+from uuid import uuid4
+
+import panel
 
 import discord
 from discord.ext import commands
@@ -21,6 +24,20 @@ class Track:
     thumbnail: str = ""
     duration: int = 0
     requester: str = ""
+    uid: str = field(default_factory=lambda: uuid4().hex)
+
+
+class TimedAudio(discord.PCMVolumeTransformer):
+    """Mede o áudio realmente enviado, incluindo pausas feitas no Discord."""
+    def __init__(self, source, volume):
+        super().__init__(source, volume=volume)
+        self.elapsed = 0.0
+
+    def read(self):
+        data = super().read()
+        if data:
+            self.elapsed += 0.02
+        return data
 
 
 def extract(query):
@@ -167,12 +184,13 @@ class Player:
                     self.current = self.queue.popleft()
                 self.done.clear()
                 self.skip = False
+                self.display_track = None
                 try:
                     track, stream = await asyncio.to_thread(extract, self.current.url)
                     voice = self.ctx.guild.voice_client
                     if not voice or not voice.is_connected():
                         return
-                    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(
+                    source = TimedAudio(discord.FFmpegPCMAudio(
                         stream, executable=os.getenv("FFMPEG_PATH") or "ffmpeg",
                         before_options="-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
                         options="-vn"), volume=self.volume)
@@ -221,9 +239,21 @@ class Player:
                     players.pop(self.ctx.guild.id, None)
 
 
+class UminidaBot(commands.Bot):
+    async def setup_hook(self):
+        self.panel_runner = await panel.start(self, globals())
+
+    async def close(self):
+        runner = getattr(self, "panel_runner", None)
+        if runner:
+            await runner.cleanup()
+            self.panel_runner = None
+        await super().close()
+
+
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents, help_command=None,
+bot = UminidaBot(command_prefix="!", intents=intents, help_command=None,
                    allowed_mentions=discord.AllowedMentions.none())
 players = {}
 locks = {}
