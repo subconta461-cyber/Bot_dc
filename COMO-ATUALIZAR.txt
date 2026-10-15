@@ -74,3 +74,5 @@ persistência SQLite, isolamento entre servidores e integração do painel.
 Não executamos ações reais em membros, nem publicamos no Railway nesta etapa.
 Este pacote não contém token, senha, .env ou dados do servidor.
 O bloqueio do YouTube detectado anteriormente não é alterado por esta versão.
+
+aaRArara
