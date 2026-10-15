@@ -1,0 +1,41 @@
+UMINIDA — MODERAÇÃO
+
+Atualização preparada a partir do commit a50630b do Bot_dc.
+
+1. Extraia o ZIP e envie dc.py, moderation.py e Dockerfile para a raiz do
+   repositório Bot_dc, substituindo os arquivos de mesmo nome.
+2. Mantenha panel.py, railway.toml, requirements.txt e a pasta site existentes.
+3. Salve o commit e acompanhe o novo deploy no Railway.
+4. No Discord, dê ao cargo da Uminida somente as permissões necessárias:
+   Banir membros, Expulsar membros, Moderar membros, Gerenciar mensagens,
+   Ler histórico de mensagens, Ver canal e Enviar mensagens.
+   Posicione o cargo acima das pessoas que ela poderá moderar.
+   Não é necessário dar Administrador.
+
+COMANDOS
+!ban @pessoa motivo       — pede confirmação por botão; expira em 30 segundos.
+!kick @pessoa motivo      — expulsa imediatamente.
+!timeout @pessoa 10m motivo — aplica timeout imediatamente.
+!limpar 20                — examina as 20 mensagens anteriores ao comando e
+                            apaga as que não estão fixadas e têm menos de 14 dias.
+!ajudamod                — ajuda com permissões e exemplos.
+
+Tempos aceitos: 30s, 10m, 2h, 1d. Limite do timeout: 28 dias.
+Limpeza: entre 1 e 100 mensagens; pode apagar menos se houver itens preservados.
+Somente o autor do comando pode confirmar/cancelar o próprio banimento.
+O banimento preserva o histórico de mensagens da pessoa.
+
+PROTEÇÕES
+Cada moderador precisa da permissão do comando, e o bot também.
+Não é possível moderar a si mesmo, a Uminida nem o dono do servidor.
+O alvo deve ter cargo inferior ao do moderador e ao da Uminida;
+o dono do servidor pode moderar cargos inferiores ao do bot.
+Timeout não pode ser aplicado a administradores.
+O banimento reconsulta os membros e verifica permissões ao confirmar.
+As ações incluem o ID do moderador e o motivo no Registro de auditoria do Discord.
+
+VALIDAÇÃO
+Testes locais com membros e chamadas simulados, sem banir, expulsar,
+silenciar ou apagar mensagens de ninguém no servidor real.
+A publicação no Railway deve ser feita após o upload dos três arquivos.
+Este pacote não contém token, senha, .env nem dependências novas.

@@ -8,6 +8,7 @@ from collections import deque
 from uuid import uuid4
 
 import panel
+from moderation import Moderation
 
 import discord
 from discord.ext import commands
@@ -241,6 +242,7 @@ class Player:
 
 class UminidaBot(commands.Bot):
     async def setup_hook(self):
+        await self.add_cog(Moderation(self))
         self.panel_runner = await panel.start(self, globals())
 
     async def close(self):
@@ -394,7 +396,7 @@ async def ajuda(ctx):
                    "!pular — próxima música, mesmo com repetição ligada\n"
                    "!pausar / !continuar — pausar/retomar\n!fila — ver músicas\n"
                    "!volume <0–100> — ajustar volume\n!parar — limpar fila e sair\n"
-                   "!ping — latência\n!ajuda — esta mensagem")
+                   "!ping — latência\n!ajudamod — comandos de moderação\n!ajuda — esta mensagem")
 
 
 @bot.event
@@ -407,6 +409,8 @@ async def on_voice_state_update(member, before, after):
 
 @bot.event
 async def on_command_error(ctx, error):
+    if ctx.command and isinstance(ctx.command.cog, Moderation):
+        return
     if isinstance(error, commands.CommandNotFound):
         return
     if isinstance(error, (commands.MissingRequiredArgument, commands.BadArgument)):
