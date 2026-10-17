@@ -1,78 +1,61 @@
-UMINIDA COMPLETA — BY: MT - X-X
+UMINIDA — ATUALIZAÇÃO DO YOUTUBE
 
-ASSINATURA
-Todas as respostas do bot usam cartões com o rodapé:
-✦ Uminida | By: Mt - X-x | 💜
-Inclui música, moderação, confirmações, avisos, erros e respostas privadas.
+Preparada sobre o commit 1a6e542 do Bot_dc em 17/10/2026.
 
-ATUALIZAR
-1. Extraia o ZIP e envie os arquivos e a pasta site para a RAIZ do Bot_dc
-   no GitHub, substituindo os de mesmo nome. Não envie o próprio ZIP.
-   Não crie outra pasta acima de dc.py.
-2. Preserve no Railway DISCORD_TOKEN, PANEL_PASSWORD e o domínio já configurado.
-3. Para salvar avisos e configurações entre deploys, adicione um Volume
-   conectado ao serviço Bot_dc com Mount Path /data.
-   Railway: clique com o botão direito no serviço > Attach Volume,
-   ou use New/Create > Volume e conecte ao Bot_dc; defina /data na montagem.
-   O código usa RAILWAY_VOLUME_MOUNT_PATH automaticamente.
-   Criar somente uma variável /data não cria o volume.
-   Sem volume, música/moderação continuam disponíveis, mas os comandos de
-   advertências e configuração de logs explicarão como ativar a persistência.
-4. Faça deploy do commit novo. Mantenha uma réplica.
-5. Confira no log: "Comandos com / sincronizados: 21".
-   Os comandos globais podem levar algum tempo para aparecer no Discord.
-   Se não aparecerem, atualize o Discord. Confira também se a instalação do
-   aplicativo no servidor inclui os escopos bot e applications.commands.
-6. No servidor, use /configlogs para escolher seu canal de registros.
-   Ou digite: !configlogs #logs
+O QUE MUDA
+- yt-dlp atualizado para nightly 2026.10.10.233141.dev0, com EJS compatível.
+- Deno habilitado explicitamente; Docker verifica Deno e EJS no build.
+- A busca e o início da música reutilizam o resultado por até 60 segundos,
+  evitando uma consulta duplicada. Resultados mais antigos são atualizados.
+- Cabeçalhos relevantes da fonte são encaminhados ao FFmpeg.
+- Se o YouTube pedir confirmação ou limitar consultas, novas tentativas
+  ficam pausadas por 60 segundos, sem impedir links de outras fontes.
+- Site e Discord mostram a causa específica em vez de "não encontrado".
+- Novo comando !diagnosticoyoutube ou /diagnosticoyoutube.
 
-PERMISSÕES
-O cargo Uminida precisa de Ver canal, Enviar mensagens e Inserir links.
-Para as ações: Banir membros, Expulsar membros, Moderar membros,
-Gerenciar mensagens e Ler histórico de mensagens, conforme o uso.
-Posicione o cargo Uminida acima dos cargos que ela poderá moderar.
-Não é necessário dar Administrador.
-Os moderadores também precisam da permissão correspondente.
-Configurar logs exige Gerenciar servidor. Advertências exigem Moderar membros.
-Escolha um canal de logs visível somente para a equipe, se desejar.
+COMO APLICAR
+1. Extraia o ZIP. Envie dc.py, panel.py, youtube_audio.py, requirements.txt
+   e Dockerfile para a raiz do GitHub, substituindo os de mesmo nome.
+2. Preserve os arquivos existentes: moderation.py, branding.py, mod_store.py,
+   railway.toml e a pasta site. Não altere senhas, token, domínio ou volume.
+3. No Railway, escolha Deploy Latest Commit para publicar o código novo.
+4. Aguarde ficar Active. O log de sincronização passa a mostrar 23 comandos.
+5. No Discord, use !diagnosticoyoutube. Exige Gerenciar servidor.
+   O comando consulta um vídeo público de teste e mostra versões/resultados.
+   Ele não inicia reprodução e não entra em uma chamada.
+6. Se o teste obtiver áudio, entre na chamada e tente !p com um link público.
 
-COMANDOS (DISPONÍVEIS COM ! E /)
-!ban @pessoa motivo
-!kick @pessoa motivo
-!timeout @pessoa 10m motivo
-!untimeout @pessoa motivo
-!unban ID_NUMERICO motivo
-!limpar 20
-!avisar @pessoa motivo
-!avisos @pessoa [página]
-!removeraviso número motivo
-!configlogs #canal
-!ajudamod
-!ajuda
+COMO INTERPRETAR
+youtube_auth: o YouTube continua exigindo confirmação na hospedagem.
+rate_limit: a fonte limitou as consultas; aguarde.
+forbidden: a fonte respondeu 403, diferente de falta de permissão do Discord.
+configuration: falta o arquivo opcional de autenticação configurado.
+no_audio/unavailable: o conteúdo não disponibilizou áudio acessível.
 
-Música: !p, !pausar, !continuar, !pular, !r, !fila, !volume, !parar, !ping.
-Os aliases antigos continuam disponíveis com !. Para /, use os nomes principais.
+LIMITE IMPORTANTE
+Atualizar o código não garante retirar um bloqueio do IP ou de sessão no
+YouTube. Os testes locais não equivalem a um teste no IP do Railway.
+Se youtube_auth persistir, envie somente o cartão de diagnóstico, sem
+credenciais, para decidir a próxima etapa. Não faça redeploy repetidamente
+esperando que o mesmo IP seja automaticamente liberado.
 
-COMPORTAMENTO
-Banir, expulsar e limpar pedem confirmação de quem executou o comando,
-com prazo de 30 segundos. Cargos e permissões são reavaliados ao confirmar.
-Limpeza seleciona até 100 mensagens anteriores ao pedido e mostra quantas
-serão apagadas. Preserva fixadas, mensagens antigas e novas após o pedido.
-Não existe desfazer limpeza nem desfazer expulsão; unban permite novo convite,
-e untimeout encerra o silêncio temporário.
-Advertências ficam isoladas por servidor e pessoa; removeraviso arquiva o
-registro em vez de apagar a trilha do moderador e do motivo.
-Os registros vão ao canal escolhido. Falha de envio não repete a ação.
-Ban/kick/timeout/unban/untimeout/limpeza também têm motivo no audit log do Discord.
-Slash de avisos e configurações são respostas privadas; com prefixo !, as
-respostas ficam no canal onde o comando foi digitado.
-Não há punições automáticas por número de avisos.
+AUTENTICAÇÃO OPCIONAL (NÃO É NECESSÁRIA PARA TESTAR ESTA ATUALIZAÇÃO)
+O código aceita YOUTUBE_COOKIES_FILE apontando para um arquivo Netscape
+privado já presente na hospedagem. Não exporta sua sessão automaticamente,
+não pede credenciais e não envia cookies para o GitHub. Não coloque esse
+arquivo no repositório, no ZIP ou no chat. Cookies podem expirar e não
+garantem que o acesso de uma hospedagem seja aceito pelo YouTube.
+Sem essa variável, a reprodução continua sem usar uma conta.
 
 VALIDAÇÃO
-Testes locais simulados de segurança, permissões, confirmação, assinatura,
-persistência SQLite, isolamento entre servidores e integração do painel.
-Não executamos ações reais em membros, nem publicamos no Railway nesta etapa.
-Este pacote não contém token, senha, .env ou dados do servidor.
-O bloqueio do YouTube detectado anteriormente não é alterado por esta versão.
+8 testes isolados do resolvedor e um teste de integração do bot passaram.
+Incluem bloqueio/cooldown, cache/expiração, concorrência, limites de cache,
+cabeçalhos, formatos, configurações opcionais e 23 comandos registrados.
+A nightly e suas dependências foram instaladas em um ambiente de teste
+separado. Nenhuma configuração do bot em produção foi alterada nesta etapa.
+Sem teste real de extração/transmissão no Railway e sem build Docker local.
 
-aaRArara
+REFERÊNCIAS OFICIAIS
+https://github.com/yt-dlp/yt-dlp#update
+https://github.com/yt-dlp/yt-dlp/wiki/EJS
+https://github.com/yt-dlp/yt-dlp/wiki/Extractors#youtube

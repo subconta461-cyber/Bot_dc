@@ -16,6 +16,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 import yt_dlp
+from youtube_audio import resolver, AudioError, status as audio_status, ffmpeg_before
 
 log = logging.getLogger("musica")
 
@@ -28,6 +29,7 @@ class Track:
     duration: int = 0
     requester: str = ""
     uid: str = field(default_factory=lambda: uuid4().hex)
+    headers: dict = field(default_factory=dict)
 
 
 class TimedAudio(discord.PCMVolumeTransformer):
@@ -44,17 +46,9 @@ class TimedAudio(discord.PCMVolumeTransformer):
 
 
 def extract(query):
-    options = {"format": "bestaudio/best", "noplaylist": True,
-               "default_search": "ytsearch1", "quiet": True,
-               "socket_timeout": 20, "retries": 2}
-    with yt_dlp.YoutubeDL(options) as ydl:
-        data = ydl.extract_info(query, download=False)
-    if data and "entries" in data:
-        data = next((entry for entry in data["entries"] if entry), None)
-    if not data or not data.get("url"):
-        raise ValueError("Nenhum áudio encontrado.")
-    return Track(data.get("title", "Música"), data.get("webpage_url") or query,
-                 data.get("thumbnail") or "", int(data.get("duration") or 0)), data["url"]
+    data = resolver.resolve(query)
+    return Track(data["title"], data["webpage_url"], data["thumbnail"], data["duration"],
+                 headers=data["http_headers"]), data["url"]
 
 
 class MusicControls(discord.ui.View):
@@ -195,7 +189,7 @@ class Player:
                         return
                     source = TimedAudio(discord.FFmpegPCMAudio(
                         stream, executable=os.getenv("FFMPEG_PATH") or "ffmpeg",
-                        before_options="-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+                        before_options=ffmpeg_before(track.headers),
                         options="-vn"), volume=self.volume)
                     loop = asyncio.get_running_loop()
                     errors = []
@@ -222,6 +216,12 @@ class Player:
                     await self.retire_card()
                     if errors:
                         raise RuntimeError("Falha durante a reprodução") from errors[0]
+                except AudioError as error:
+                    await self.retire_card()
+                    log.warning("Falha na fonte de áudio: %s", error.code)
+                    await self.say(str(error))
+                    self.current = None
+                    continue
                 except Exception:
                     await self.retire_card()
                     log.exception("Falha ao tocar música")
@@ -311,6 +311,10 @@ async def p(ctx, *, query: str):
         try:
             track, _ = await asyncio.to_thread(extract, query)
             track.requester = ctx.author.display_name
+        except AudioError as error:
+            log.warning("Busca recusada pela fonte: %s", error.code)
+            await ctx.send(str(error))
+            return
         except Exception:
             log.exception("Falha na busca")
             await ctx.send("Não encontrei áudio acessível. Tente outro nome ou link.")
@@ -452,6 +456,31 @@ async def on_command_error(ctx, error):
     else:
         log.error("Erro em comando", exc_info=(type(error), error, error.__traceback__))
         await ctx.send("Não consegui executar o comando. Confira minhas permissões e o console do bot.")
+
+
+@bot.hybrid_command(name="diagnosticoyoutube", description="Testar o acesso ao YouTube nesta hospedagem. Requer Gerenciar servidor.")
+@discord.app_commands.guild_only()
+@discord.app_commands.default_permissions(manage_guild=True)
+@commands.has_guild_permissions(manage_guild=True)
+@commands.cooldown(1, 60, commands.BucketType.guild)
+async def diagnosticoyoutube(ctx):
+    await ctx.defer(ephemeral=True)
+    info = await asyncio.to_thread(audio_status)
+    embed = card("YouTube • Diagnóstico da hospedagem", "Teste de consulta de áudio público. Não inicia reprodução nem usa sua conta por padrão.")
+    embed.add_field(name="Extrator", value=f"yt-dlp `{info['yt_dlp']}`\nEJS `{info['ejs']}`", inline=False)
+    embed.add_field(name="Dependências", value=f"Deno: {info['deno']}\nFFmpeg: {info['ffmpeg']}\nAutenticação: {info['authentication']}", inline=False)
+    try:
+        await asyncio.wait_for(asyncio.to_thread(extract, "https://www.youtube.com/watch?v=jNQXAC9IVRw"), timeout=45)
+        result = "✅ A hospedagem conseguiu obter uma URL de áudio para o vídeo de teste. Isso ainda não testa a transmissão no Discord."
+    except AudioError as error:
+        result = f"**Código:** `{error.code}`\n{error}"
+    except asyncio.TimeoutError:
+        result = "A consulta não terminou em 45 segundos. A rede ou o serviço pode estar demorando para responder."
+    except Exception:
+        log.exception("Falha inesperada no diagnóstico de áudio")
+        result = "O diagnóstico encontrou uma falha inesperada. Confira o console da hospedagem."
+    embed.add_field(name="Resultado", value=result, inline=False)
+    await ctx.send(embed=embed, ephemeral=True)
 
 
 @bot.event

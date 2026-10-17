@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import discord
 from aiohttp import web, BasicAuth
 from branding import message_kwargs
+from youtube_audio import AudioError
 
 log = logging.getLogger("uminida.painel")
 ROOT = Path(__file__).parent / "site"
@@ -165,6 +166,9 @@ def create_app(bot, runtime):
                     return web.json_response({"error": "Use um nome, ou link HTTPS do YouTube ou SoundCloud."}, status=400)
             try:
                 track, _ = await asyncio.wait_for(asyncio.to_thread(runtime["extract"], query), timeout=45)
+            except AudioError as error:
+                log.warning("Busca recusada pela fonte: %s", error.code)
+                return web.json_response({"error": str(error), "code": error.code}, status=422)
             except Exception:
                 log.exception("Busca pelo painel falhou")
                 return web.json_response({"error": "Não encontrei áudio acessível. Tente outro nome ou link."}, status=422)
