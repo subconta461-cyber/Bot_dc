@@ -196,6 +196,7 @@ def create_app(bot, runtime):
                 track.requester = "Painel da Uminida"
                 player.ctx = ctx
                 player.queue.append(track)
+                player.sync_buffer()
                 player.changed.set()
             return web.json_response({"message": "Música adicionada à fila 💜"})
         player = runtime["players"].get(guild.id)

@@ -70,6 +70,15 @@ class Resolver:
         self.blocked_until=0
         self.blocked=None
 
+    def invalidate(self, query):
+        """Remove também as entradas equivalentes ao link consultado."""
+        with self.lock:
+            entry = self.cache.get(query)
+            canonical = entry[1]["webpage_url"] if entry else query
+            for key in list(self.cache):
+                if key == query or self.cache[key][1]["webpage_url"] == canonical:
+                    self.cache.pop(key)
+
     def resolve(self,query):
         query=query.strip()
         if not query:
@@ -111,7 +120,7 @@ class Resolver:
                 raise failure from error
             result={"title":info.get("title") or "Música","url":info["url"],
                     "webpage_url":info.get("webpage_url") or query,"thumbnail":info.get("thumbnail") or "",
-                    "duration":int(info.get("duration") or 0),"http_headers":dict(info.get("http_headers") or {})}
+                    "duration":int(info.get("duration") or 0),"is_live":bool(info.get("is_live")),"http_headers":dict(info.get("http_headers") or {})}
             expires=self.clock()+self.ttl
             for key in (query,result["webpage_url"]):
                 self.cache[key]=(expires,result)

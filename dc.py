@@ -17,6 +17,7 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import yt_dlp
 from youtube_audio import resolver, AudioError, status as audio_status, ffmpeg_before
+from local_audio import AudioBuffer
 
 log = logging.getLogger("musica")
 
@@ -116,6 +117,7 @@ def music_embed(player):
     embed.add_field(name="Volume", value=f"{round(player.volume * 100)}%")
     embed.add_field(name="Repetição", value="Ligada 🔁" if player.repeat else "Desligada")
     embed.add_field(name="Pedido por", value=track.requester[:100] or "Alguém do servidor")
+    embed.add_field(name="Reprodução", value="Áudio preparado 💜" if player.audio_mode == "download" else "Transmissão direta", inline=False)
     embed.set_footer(text="Bora ouvir alguma coisa? 💜 • !p nome ou link")
     return signed(embed)
 
@@ -132,6 +134,8 @@ class Player:
         self.card = None
         self.controls = None
         self.display_track = None
+        self.audio_mode = os.getenv("UMINIDA_AUDIO_MODE", "download").strip().lower()
+        self.buffer = AudioBuffer(os.getenv("FFMPEG_PATH") or "ffmpeg")
         self.done = asyncio.Event()
         self.changed = asyncio.Event()
         self.task = asyncio.create_task(self.run())
@@ -156,6 +160,7 @@ class Player:
         self.controls = None
 
     async def refresh_card(self):
+        self.sync_buffer()
         if not self.card or not self.controls:
             return
         voice = self.ctx.guild.voice_client
@@ -165,6 +170,17 @@ class Player:
             await self.card.edit(embed=music_embed(self), view=self.controls)
         except discord.HTTPException:
             log.warning("Não consegui atualizar o cartão da música.")
+
+    def sync_buffer(self):
+        if self.audio_mode != "download" or self.closing:
+            return
+        keep = {self.current.url} if self.current else set()
+        if self.queue:
+            keep.add(self.queue[0].url)
+        self.buffer.retain(keep)
+        voice = self.ctx.guild.voice_client
+        if self.current and self.queue and voice and (voice.is_playing() or voice.is_paused()):
+            self.buffer.prefetch(self.queue[0].url)
 
     async def run(self):
         try:
@@ -179,17 +195,24 @@ class Player:
                             return
                         continue
                     self.current = self.queue.popleft()
+                    announced = False
                 self.done.clear()
                 self.skip = False
                 self.display_track = None
+                self.sync_buffer()
                 try:
                     track, stream = await asyncio.to_thread(extract, self.current.url)
+                    if self.audio_mode == "download":
+                        job = self.buffer.jobs.get(self.current.url)
+                        if job is None or not job.done():
+                            await self.say(f"⏳ Preparando **{discord.utils.escape_markdown(track.title)[:200]}**. Vou baixar o áudio antes de tocar para reduzir as interrupções.")
+                        stream = str(await self.buffer.get(self.current.url))
                     voice = self.ctx.guild.voice_client
                     if not voice or not voice.is_connected():
                         return
                     source = TimedAudio(discord.FFmpegPCMAudio(
                         stream, executable=os.getenv("FFMPEG_PATH") or "ffmpeg",
-                        before_options=ffmpeg_before(track.headers),
+                        before_options="-nostdin" if self.audio_mode == "download" else ffmpeg_before(track.headers),
                         options="-vn"), volume=self.volume)
                     loop = asyncio.get_running_loop()
                     errors = []
@@ -206,14 +229,16 @@ class Player:
                         raise
                     track.requester = self.current.requester
                     self.display_track = track
-                    self.controls = MusicControls(self)
-                    try:
-                        self.card = await self.ctx.send(embed=music_embed(self), view=self.controls)
-                        await self.refresh_card()
-                    except discord.HTTPException:
-                        await self.say(f"🎵 Tocando: {discord.utils.escape_markdown(track.title)[:250]}")
+                    self.sync_buffer()
+                    if not announced:
+                        self.controls = MusicControls(self)
+                        try:
+                            self.card = await self.ctx.send(embed=music_embed(self), view=self.controls)
+                        except discord.HTTPException:
+                            await self.say(f"🎵 Tocando: {discord.utils.escape_markdown(track.title)[:250]}")
+                        announced = True
+                    await self.refresh_card()
                     await self.done.wait()
-                    await self.retire_card()
                     if errors:
                         raise RuntimeError("Falha durante a reprodução") from errors[0]
                 except AudioError as error:
@@ -229,6 +254,7 @@ class Player:
                     self.current = None
                     continue
                 if self.skip or not self.repeat:
+                    await self.retire_card()
                     self.current = None
         finally:
             self.closing = True
@@ -238,8 +264,11 @@ class Player:
                 if voice:
                     await voice.disconnect(force=True)
             finally:
-                if players.get(self.ctx.guild.id) is self:
-                    players.pop(self.ctx.guild.id, None)
+                try:
+                    await self.buffer.close()
+                finally:
+                    if players.get(self.ctx.guild.id) is self:
+                        players.pop(self.ctx.guild.id, None)
 
 
 class UminidaBot(commands.Bot):
@@ -331,6 +360,7 @@ async def p(ctx, *, query: str):
                 return
             player.ctx = ctx
             player.queue.append(track)
+            player.sync_buffer()
             player.changed.set()
     await ctx.send(f"✅ Na fila: {discord.utils.escape_markdown(track.title)[:250]}")
 
