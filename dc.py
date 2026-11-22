@@ -3,6 +3,7 @@ import asyncio
 import logging
 import math
 import os
+import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -507,39 +508,41 @@ async def on_command_error(ctx, error):
 
 
 def _test_ffmpeg_stream(stream_url, headers):
+    """Reproduz o que o bot faz ao tocar: FFmpeg lê a URL e decodifica 3s para PCM."""
     ffmpeg_exec = get_ffmpeg_executable()
-    cmd = [ffmpeg_exec, "-nostdin", "-t", "1", "-i", stream_url, "-f", "null", "-"]
-    if headers:
-        safe = []
-        for key in ("User-Agent", "Referer", "Origin"):
-            value = str(headers.get(key, ""))
-            if value and not any(c in value for c in "\r\n\x00"):
-                safe.append(f"{key}: {value}\r\n")
-        if safe:
-            cmd = [ffmpeg_exec, "-nostdin", "-headers", "".join(safe), "-t", "1", "-i", stream_url, "-f", "null", "-"]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-    return proc.returncode, (proc.stderr or "").strip().splitlines()[-3:]
+    cmd = [ffmpeg_exec, *shlex.split(ffmpeg_before(headers)), "-i", stream_url,
+           "-vn", "-t", "3", "-f", "s16le", "-ar", "48000", "-ac", "2", "pipe:1"]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        return -1, 0, ["FFmpeg não terminou em 30 segundos (conexão lenta ou travada)."]
+    stderr = proc.stderr.decode("utf-8", "replace").strip().splitlines()
+    return proc.returncode, len(proc.stdout), stderr[-6:]
 
 
-@bot.hybrid_command(name="diagnosticoyoutube", description="Testar o acesso ao YouTube nesta hospedagem. Requer Gerenciar servidor.")
+@bot.hybrid_command(name="diagnosticoyoutube", description="Testar a busca e a leitura de áudio nesta hospedagem. Requer Gerenciar servidor.")
 @discord.app_commands.guild_only()
 @discord.app_commands.default_permissions(manage_guild=True)
 @commands.has_guild_permissions(manage_guild=True)
-@commands.cooldown(1, 60, commands.BucketType.guild)
-async def diagnosticoyoutube(ctx):
+@commands.cooldown(1, 20, commands.BucketType.guild)
+async def diagnosticoyoutube(ctx, *, busca: str = "lofi hip hop"):
     await ctx.defer(ephemeral=True)
     info = await asyncio.to_thread(audio_status)
-    embed = card("YouTube • Diagnóstico da hospedagem", "Teste de consulta e leitura de áudio público.")
+    embed = card("Diagnóstico de áudio da hospedagem", "Teste de busca e leitura de áudio, igual ao que o bot faz ao tocar.")
     embed.add_field(name="Extrator", value=f"yt-dlp `{info['yt_dlp']}`\nEJS `{info['ejs']}`", inline=False)
     embed.add_field(name="Dependências", value=f"Deno: {info['deno']}\nFFmpeg: {info['ffmpeg']}\nAutenticação: {info['authentication']}", inline=False)
+    embed.add_field(name="Busca testada", value=f"`{busca[:200]}`\nBusca por nome usa: `{os.getenv('SEARCH_PROVIDER', 'soundcloud')}`", inline=False)
     try:
-        track, stream_url = await asyncio.wait_for(asyncio.to_thread(extract, "https://www.youtube.com/watch?v=jNQXAC9IVRw"), timeout=45)
-        code, tail = await asyncio.to_thread(_test_ffmpeg_stream, stream_url, track.headers)
-        if code == 0:
-            result = "✅ URL extraída e FFmpeg leu o fluxo de áudio com sucesso! Se não sair som no canal, verifique permissões de **Falar** do bot no canal de voz."
+        track, stream_url = await asyncio.wait_for(asyncio.to_thread(extract, busca), timeout=45)
+        kind = "HLS (m3u8)" if ".m3u8" in stream_url.lower() else "arquivo direto"
+        found = f"**Música:** {discord.utils.escape_markdown(track.title)[:150]}\n**Tipo de fluxo:** {kind}"
+        code, size, tail = await asyncio.to_thread(_test_ffmpeg_stream, stream_url, track.headers)
+        if code == 0 and size > 100000:
+            result = f"{found}\n✅ O FFmpeg leu e decodificou o áudio ({size // 1000} KB em 3s). A fonte funciona; se ainda não sair som no canal, o problema está na reprodução no Discord."
         else:
-            err_msg = "\n".join(tail)[-300:] if tail else "sem detalhes"
-            result = f"⚠️ URL extraída, mas o FFmpeg falhou ao ler o áudio (código `{code}`):\n```\n{err_msg}\n```"
+            err_msg = "\n".join(tail)[-500:] if tail else "sem detalhes"
+            result = f"{found}\n⚠️ O FFmpeg falhou (código `{code}`, {size} bytes de áudio):\n```\n{err_msg}\n```"
+            log.warning("Diagnóstico: FFmpeg falhou (código %s): %s", code, " | ".join(tail))
     except AudioError as error:
         result = f"**Código:** `{error.code}`\n{error}"
     except asyncio.TimeoutError:
@@ -547,7 +550,7 @@ async def diagnosticoyoutube(ctx):
     except Exception:
         log.exception("Falha inesperada no diagnóstico de áudio")
         result = "O diagnóstico encontrou uma falha inesperada. Confira o console da hospedagem."
-    embed.add_field(name="Resultado", value=result, inline=False)
+    embed.add_field(name="Resultado", value=result[:1024], inline=False)
     await ctx.send(embed=embed, ephemeral=True)
 
 
