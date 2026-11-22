@@ -4,6 +4,7 @@ import logging
 import math
 import os
 import shutil
+import subprocess
 from dataclasses import dataclass, field
 from collections import deque
 from uuid import uuid4
@@ -15,11 +16,20 @@ from branding import UminidaContext, signed, message_kwargs, card
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
-import yt_dlp
 from youtube_audio import resolver, AudioError, status as audio_status, ffmpeg_before
 from local_audio import AudioBuffer
 
 log = logging.getLogger("musica")
+
+
+def get_ffmpeg_executable():
+    configured = (os.getenv("FFMPEG_PATH") or "").strip()
+    if configured and shutil.which(configured):
+        return configured
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    return configured or "ffmpeg"
 
 
 @dataclass
@@ -134,8 +144,8 @@ class Player:
         self.card = None
         self.controls = None
         self.display_track = None
-        self.audio_mode = os.getenv("UMINIDA_AUDIO_MODE", "download").strip().lower()
-        self.buffer = AudioBuffer(os.getenv("FFMPEG_PATH") or "ffmpeg")
+        self.audio_mode = os.getenv("UMINIDA_AUDIO_MODE", "stream").strip().lower()
+        self.buffer = AudioBuffer(get_ffmpeg_executable())
         self.done = asyncio.Event()
         self.changed = asyncio.Event()
         self.task = asyncio.create_task(self.run())
@@ -210,9 +220,11 @@ class Player:
                     voice = self.ctx.guild.voice_client
                     if not voice or not voice.is_connected():
                         return
+                    ffmpeg_exec = get_ffmpeg_executable()
+                    before_opts = "-nostdin" if self.audio_mode == "download" else ffmpeg_before(track.headers)
                     source = TimedAudio(discord.FFmpegPCMAudio(
-                        stream, executable=os.getenv("FFMPEG_PATH") or "ffmpeg",
-                        before_options="-nostdin" if self.audio_mode == "download" else ffmpeg_before(track.headers),
+                        stream, executable=ffmpeg_exec,
+                        before_options=before_opts,
                         options="-vn"), volume=self.volume)
                     loop = asyncio.get_running_loop()
                     errors = []
@@ -241,6 +253,12 @@ class Player:
                     await self.done.wait()
                     if errors:
                         raise RuntimeError("Falha durante a reprodução") from errors[0]
+                    if not self.skip and source.elapsed < 0.2:
+                        resolver.invalidate(self.current.url)
+                        log.warning("FFmpeg encerrou sem enviar áudio (elapsed=%.2fs) para %s", source.elapsed, track.title)
+                        await self.say("⚠️ O fluxo de áudio fechou imediatamente sem som (possível bloqueio 403 do YouTube no servidor). Tente novamente ou use um link do SoundCloud.")
+                        self.current = None
+                        continue
                 except AudioError as error:
                     await self.retire_card()
                     log.warning("Falha na fonte de áudio: %s", error.code)
@@ -303,7 +321,7 @@ class UminidaBot(commands.Bot):
 intents = discord.Intents.default()
 intents.message_content = True
 bot = UminidaBot(command_prefix="!", intents=intents, help_command=None,
-                   allowed_mentions=discord.AllowedMentions.none())
+                 allowed_mentions=discord.AllowedMentions.none())
 players = {}
 locks = {}
 
@@ -488,6 +506,21 @@ async def on_command_error(ctx, error):
         await ctx.send("Não consegui executar o comando. Confira minhas permissões e o console do bot.")
 
 
+def _test_ffmpeg_stream(stream_url, headers):
+    ffmpeg_exec = get_ffmpeg_executable()
+    cmd = [ffmpeg_exec, "-nostdin", "-t", "1", "-i", stream_url, "-f", "null", "-"]
+    if headers:
+        safe = []
+        for key in ("User-Agent", "Referer", "Origin"):
+            value = str(headers.get(key, ""))
+            if value and not any(c in value for c in "\r\n\x00"):
+                safe.append(f"{key}: {value}\r\n")
+        if safe:
+            cmd = [ffmpeg_exec, "-nostdin", "-headers", "".join(safe), "-t", "1", "-i", stream_url, "-f", "null", "-"]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    return proc.returncode, (proc.stderr or "").strip().splitlines()[-3:]
+
+
 @bot.hybrid_command(name="diagnosticoyoutube", description="Testar o acesso ao YouTube nesta hospedagem. Requer Gerenciar servidor.")
 @discord.app_commands.guild_only()
 @discord.app_commands.default_permissions(manage_guild=True)
@@ -496,12 +529,17 @@ async def on_command_error(ctx, error):
 async def diagnosticoyoutube(ctx):
     await ctx.defer(ephemeral=True)
     info = await asyncio.to_thread(audio_status)
-    embed = card("YouTube • Diagnóstico da hospedagem", "Teste de consulta de áudio público. Não inicia reprodução nem usa sua conta por padrão.")
+    embed = card("YouTube • Diagnóstico da hospedagem", "Teste de consulta e leitura de áudio público.")
     embed.add_field(name="Extrator", value=f"yt-dlp `{info['yt_dlp']}`\nEJS `{info['ejs']}`", inline=False)
     embed.add_field(name="Dependências", value=f"Deno: {info['deno']}\nFFmpeg: {info['ffmpeg']}\nAutenticação: {info['authentication']}", inline=False)
     try:
-        await asyncio.wait_for(asyncio.to_thread(extract, "https://www.youtube.com/watch?v=jNQXAC9IVRw"), timeout=45)
-        result = "✅ A hospedagem conseguiu obter uma URL de áudio para o vídeo de teste. Isso ainda não testa a transmissão no Discord."
+        track, stream_url = await asyncio.wait_for(asyncio.to_thread(extract, "https://www.youtube.com/watch?v=jNQXAC9IVRw"), timeout=45)
+        code, tail = await asyncio.to_thread(_test_ffmpeg_stream, stream_url, track.headers)
+        if code == 0:
+            result = "✅ URL extraída e FFmpeg leu o fluxo de áudio com sucesso! Se não sair som no canal, verifique permissões de **Falar** do bot no canal de voz."
+        else:
+            err_msg = "\n".join(tail)[-300:] if tail else "sem detalhes"
+            result = f"⚠️ URL extraída, mas o FFmpeg falhou ao ler o áudio (código `{code}`):\n```\n{err_msg}\n```"
     except AudioError as error:
         result = f"**Código:** `{error.code}`\n{error}"
     except asyncio.TimeoutError:
@@ -524,7 +562,6 @@ if __name__ == "__main__":
     token = os.getenv("DISCORD_TOKEN", "").strip()
     if not token or token == "seu_token_aqui":
         raise SystemExit("Configure DISCORD_TOKEN no arquivo .env (veja .env.example).")
-    if not shutil.which(os.getenv("FFMPEG_PATH") or "ffmpeg"):
+    if not shutil.which(get_ffmpeg_executable()):
         raise SystemExit("FFmpeg não encontrado. Instale-o ou configure FFMPEG_PATH no .env.")
     bot.run(token)
-
