@@ -1,8 +1,0 @@
-.env
-.env.*
-.git
-.venv*
-__pycache__
-*.log
-*.backup*
-*.antes-do-site*
