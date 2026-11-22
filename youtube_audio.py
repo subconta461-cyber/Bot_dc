@@ -94,8 +94,12 @@ class Resolver:
         query = query.strip()
         if not query:
             raise AudioError("empty", "Digite o nome ou link da música.")
+        if query.lower().startswith(("soundcloud.com/", "www.soundcloud.com/", "m.soundcloud.com/", "on.soundcloud.com/")):
+            query = "https://" + query
         host = (urlsplit(query).hostname or "").lower()
-        youtube = not host or host == "youtu.be" or host == "youtube.com" or host.endswith(".youtube.com")
+        # SEARCH_PROVIDER: "soundcloud" (padrão) ou "youtube" para buscas por nome (sem link).
+        provider = os.getenv("SEARCH_PROVIDER", "soundcloud").strip().lower()
+        youtube = host == "youtu.be" or host == "youtube.com" or host.endswith(".youtube.com") or (not host and provider == "youtube")
         with self.lock:
             now = self.clock()
             for key in list(self.cache):
@@ -108,7 +112,7 @@ class Resolver:
             options = {
                 "format": "bestaudio[acodec!=none]/bestaudio/best",
                 "noplaylist": True,
-                "default_search": "ytsearch1",
+                "default_search": "ytsearch1" if provider == "youtube" else "scsearch1",
                 "quiet": True,
                 "no_warnings": True,
                 "socket_timeout": 15,
