@@ -325,6 +325,10 @@ class GuildPlayer:
         if self.closing:
             return
         self.closing = True
+        # Remove do registro ANTES de qualquer await: a desconexão dispara eventos de voz
+        # que podem interromper esta limpeza no meio.
+        if self.cog.players.get(self.guild.id) is self:
+            del self.cog.players[self.guild.id]
         await self.retire_message()
         vc = self.guild.voice_client
         if vc:
@@ -332,10 +336,10 @@ class GuildPlayer:
                 await vc.disconnect(force=True)
             except Exception:
                 pass
-        if self.cog.players.get(self.guild.id) is self:
-            del self.cog.players[self.guild.id]
 
     async def destroy(self):
+        if self.closing:
+            return  # a limpeza já está em andamento; cancelar de novo a interromperia
         if not self.task.done() and self.task is not asyncio.current_task():
             self.task.cancel()
             await asyncio.gather(self.task, return_exceptions=True)
@@ -534,7 +538,8 @@ class Music(commands.Cog):
     @commands.hybrid_command(name="teste", description="Toca um bipe de 4 segundos para testar se o áudio chega.")
     async def teste(self, ctx):
         channel = self.require_voice(ctx)
-        if ctx.guild.id in self.players:
+        existing = self.players.get(ctx.guild.id)
+        if existing and not existing.task.done() and not existing.closing:
             await safe(ctx.send("Use `!stop` antes, porque há música ativa."))
             return
         await safe(ctx.defer())
