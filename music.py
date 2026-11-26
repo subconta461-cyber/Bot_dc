@@ -46,6 +46,17 @@ def fmt(seconds):
     return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
 
 
+async def safe(awaitable):
+    """Chamadas à API REST do Discord podem falhar (ex.: IP da hospedagem bloqueado pelo Cloudflare).
+    A voz não usa REST, então uma resposta perdida não pode impedir a música de tocar."""
+    try:
+        return await awaitable
+    except discord.HTTPException as error:
+        log.warning("O Discord recusou uma chamada da API (HTTP %s). Se for 429 com página HTML, "
+                    "o IP da hospedagem está bloqueado pelo Cloudflare. A música continua mesmo assim.", error.status)
+        return None
+
+
 class TimedSource(discord.PCMVolumeTransformer):
     """Conta quanto áudio realmente foi enviado (cada leitura = 20 ms)."""
 
@@ -372,17 +383,17 @@ class Music(commands.Cog):
         me = ctx.guild.me
         perms = channel.permissions_for(me)
         if not (perms.connect and perms.speak):
-            await ctx.send("⚠️ Eu preciso das permissões **Conectar** e **Falar** nesse canal de voz.")
+            await safe(ctx.send("⚠️ Eu preciso das permissões **Conectar** e **Falar** nesse canal de voz."))
             return
-        await ctx.defer()
+        await safe(ctx.defer())
         try:
             track = await asyncio.to_thread(sources.extract, busca)
         except AudioError as error:
-            await ctx.send(f"⚠️ {error.message}")
+            await safe(ctx.send(f"⚠️ {error.message}"))
             return
         except Exception:
             log.exception("Falha inesperada na busca")
-            await ctx.send("⚠️ Não consegui buscar essa música agora.")
+            await safe(ctx.send("⚠️ Não consegui buscar essa música agora."))
             return
         track.requester = ctx.author.display_name
         lock = self.locks.setdefault(ctx.guild.id, asyncio.Lock())
@@ -390,14 +401,14 @@ class Music(commands.Cog):
             channel = self.require_voice(ctx)
             player = self.players.get(ctx.guild.id)
             if player and len(player.queue) >= MAX_QUEUE:
-                await ctx.send(f"A fila está cheia ({MAX_QUEUE} músicas).")
+                await safe(ctx.send(f"A fila está cheia ({MAX_QUEUE} músicas)."))
                 return
             if ctx.voice_client is None:
                 try:
                     await channel.connect(self_deaf=True)
                 except Exception:
                     log.exception("Falha ao conectar no canal de voz")
-                    await ctx.send("⚠️ Não consegui entrar no canal de voz.")
+                    await safe(ctx.send("⚠️ Não consegui entrar no canal de voz."))
                     return
             if player is None or player.task.done():
                 player = GuildPlayer(self, ctx.guild, ctx.channel)
@@ -407,55 +418,55 @@ class Music(commands.Cog):
             position = len(player.queue)
             player.wake.set()
         where = f"posição {position} na fila" if player.current else "preparando para tocar"
-        await ctx.send(f"✅ **{clean(track.title, 200)}** — {where}.")
+        await safe(ctx.send(f"✅ **{clean(track.title, 200)}** — {where}."))
 
     @commands.hybrid_command(name="skip", aliases=["pular", "s"], description="Pula a música atual.")
     async def skip(self, ctx):
         player = self.active(ctx)
-        await ctx.send("⏭️ Pulada." if player.skip() else "Nada está tocando agora.")
+        await safe(ctx.send("⏭️ Pulada." if player.skip() else "Nada está tocando agora."))
 
     @commands.hybrid_command(name="pause", aliases=["pausar"], description="Pausa a música.")
     async def pause(self, ctx):
         self.active(ctx)
         if ctx.voice_client.is_playing():
             ctx.voice_client.pause()
-            await ctx.send("⏸️ Pausado.")
+            await safe(ctx.send("⏸️ Pausado."))
         else:
-            await ctx.send("Nada está tocando agora.")
+            await safe(ctx.send("Nada está tocando agora."))
 
     @commands.hybrid_command(name="resume", aliases=["continuar"], description="Retoma a música pausada.")
     async def resume(self, ctx):
         self.active(ctx)
         if ctx.voice_client.is_paused():
             ctx.voice_client.resume()
-            await ctx.send("▶️ Retomado.")
+            await safe(ctx.send("▶️ Retomado."))
         else:
-            await ctx.send("A música não está pausada.")
+            await safe(ctx.send("A música não está pausada."))
 
     @commands.hybrid_command(name="stop", aliases=["parar", "sair", "leave"], description="Para tudo, limpa a fila e sai do canal.")
     async def stop(self, ctx):
         player = self.active(ctx)
-        await ctx.send("⏹️ Parei e saí do canal.")
+        await safe(ctx.send("⏹️ Parei e saí do canal."))
         await player.destroy()
 
     @commands.hybrid_command(name="queue", aliases=["fila", "q"], description="Mostra a fila.")
     async def queue(self, ctx):
-        await ctx.send(embed=self.active(ctx).queue_embed())
+        await safe(ctx.send(embed=self.active(ctx).queue_embed()))
 
     @commands.hybrid_command(name="nowplaying", aliases=["np", "tocando"], description="Mostra a música atual.")
     async def nowplaying(self, ctx):
         player = self.active(ctx)
         if player.current is None:
-            await ctx.send("Nada está tocando agora.")
+            await safe(ctx.send("Nada está tocando agora."))
         else:
-            await ctx.send(embed=player.embed())
+            await safe(ctx.send(embed=player.embed()))
 
     @commands.hybrid_command(name="loop", aliases=["repetir", "l"], description="Repete a faixa, a fila ou desliga.")
     @app_commands.describe(modo="off, faixa ou fila (vazio = alterna)")
     async def loop_cmd(self, ctx, modo: Optional[Literal["off", "faixa", "fila"]] = None):
         player = self.active(ctx)
         player.loop = modo or LOOP_NEXT[player.loop]
-        await ctx.send(f"🔁 Loop: **{LOOP_LABEL[player.loop]}**.")
+        await safe(ctx.send(f"🔁 Loop: **{LOOP_LABEL[player.loop]}**."))
         await player.refresh_message()
 
     @commands.hybrid_command(name="volume", aliases=["vol", "v"], description="Mostra ou muda o volume (0 a 100).")
@@ -463,10 +474,10 @@ class Music(commands.Cog):
     async def volume(self, ctx, nivel: Optional[commands.Range[int, 0, 100]] = None):
         player = self.active(ctx)
         if nivel is None:
-            await ctx.send(f"🔊 Volume atual: **{round(player.volume * 100)}%**")
+            await safe(ctx.send(f"🔊 Volume atual: **{round(player.volume * 100)}%**"))
             return
         player.set_volume(nivel)
-        await ctx.send(f"🔊 Volume: **{nivel}%**")
+        await safe(ctx.send(f"🔊 Volume: **{nivel}%**"))
         await player.refresh_message()
 
     @commands.hybrid_command(name="shuffle", aliases=["misturar"], description="Embaralha a fila.")
@@ -476,27 +487,27 @@ class Music(commands.Cog):
         random.shuffle(items)
         player.queue.clear()
         player.queue.extend(items)
-        await ctx.send("🔀 Fila embaralhada.")
+        await safe(ctx.send("🔀 Fila embaralhada."))
 
     @commands.hybrid_command(name="remove", aliases=["remover"], description="Remove uma música da fila pela posição.")
     @app_commands.describe(posicao="Número da música na fila")
     async def remove(self, ctx, posicao: commands.Range[int, 1, 500]):
         player = self.active(ctx)
         if posicao > len(player.queue):
-            await ctx.send("Essa posição não existe na fila.")
+            await safe(ctx.send("Essa posição não existe na fila."))
             return
         items = list(player.queue)
         removed = items.pop(posicao - 1)
         player.queue.clear()
         player.queue.extend(items)
-        await ctx.send(f"🗑️ Removida: **{clean(removed.title, 150)}**")
+        await safe(ctx.send(f"🗑️ Removida: **{clean(removed.title, 150)}**"))
 
     @commands.hybrid_command(name="clear", aliases=["limpar"], description="Limpa a fila (a música atual continua).")
     async def clear(self, ctx):
         player = self.active(ctx)
         total = len(player.queue)
         player.queue.clear()
-        await ctx.send(f"🧹 Fila limpa ({total} músicas removidas).")
+        await safe(ctx.send(f"🧹 Fila limpa ({total} músicas removidas)."))
 
     @commands.hybrid_command(name="ajuda", aliases=["help", "comandos"], description="Lista os comandos.")
     async def ajuda(self, ctx):
@@ -518,15 +529,15 @@ class Music(commands.Cog):
             f"`{p}diagnostico` — testa busca e FFmpeg (Gerenciar servidor)\n\n"
             "Todos também funcionam como comandos `/`."
         )
-        await ctx.send(embed=e)
+        await safe(ctx.send(embed=e))
 
     @commands.hybrid_command(name="teste", description="Toca um bipe de 4 segundos para testar se o áudio chega.")
     async def teste(self, ctx):
         channel = self.require_voice(ctx)
         if ctx.guild.id in self.players:
-            await ctx.send("Use `!stop` antes, porque há música ativa.")
+            await safe(ctx.send("Use `!stop` antes, porque há música ativa."))
             return
-        await ctx.defer()
+        await safe(ctx.defer())
         vc = ctx.voice_client
         try:
             if vc is None:
@@ -536,12 +547,14 @@ class Music(commands.Cog):
             tone = discord.FFmpegPCMAudio("sine=frequency=440:duration=4", executable=sources.ffmpeg_path() or "ffmpeg",
                                           before_options="-f lavfi", options="-vn")
             vc.play(discord.PCMVolumeTransformer(tone, volume=0.4), after=lambda e: loop.call_soon_threadsafe(done.set))
-            await ctx.send("🔔 Tocando um bipe de 4 segundos. **Você ouviu?** "
-                           "Se não ouviu, o problema é a voz (não a música): rode `/diagnostico` e veja se o `davey` aparece.")
+            log.info("/teste: bipe iniciado no canal de voz.")
+            await safe(ctx.send("🔔 Tocando um bipe de 4 segundos. **Você ouviu?** "
+                                "Se não ouviu, o problema é a voz (não a música): rode `/diagnostico` e veja se o `davey` aparece."))
             await asyncio.wait_for(done.wait(), 15)
+            log.info("/teste: bipe terminou.")
         except Exception:
             log.exception("Falha no /teste")
-            await ctx.send("⚠️ O teste falhou. Veja os logs do Render.")
+            await safe(ctx.send("⚠️ O teste falhou. Veja os logs do Render."))
         finally:
             if vc and vc.is_connected():
                 await vc.disconnect()
@@ -583,7 +596,7 @@ class Music(commands.Cog):
         except Exception:
             log.exception("Falha no diagnóstico")
             lines.append("⚠️ Falha inesperada (veja os logs).")
-        await ctx.send("```\n" + "\n".join(lines)[:1850] + "\n```", ephemeral=True)
+        await safe(ctx.send("```\n" + "\n".join(lines)[:1850] + "\n```", ephemeral=True))
 
     # ---------- eventos de voz ----------
     @commands.Cog.listener()

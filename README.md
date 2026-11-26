@@ -58,6 +58,14 @@ A mensagem "Tocando agora" tem botões: ⏯️ pausar/retomar, ⏭️ pular, �
 4. Veja a aba **Logs** do Render logo depois de pedir a música. O bot tenta 3 formas de tocar
    (transmissão completa, transmissão simples e download) e registra qual falhou e por quê.
 
+## Erro 429 com página HTML nos Logs
+
+Se os Logs mostrarem `429 Too Many Requests` seguido de uma página HTML (`<!doctype html>...`), o **IP compartilhado
+da hospedagem está bloqueado pelo Cloudflare do Discord**. O bot continua conectado e a voz funciona, mas as
+**respostas em texto falham**. Isso acontece no Render (e no Railway/Replit) porque vários bots dividem o mesmo IP
+e a equipe do Render informa que não é possível trocar o IP de saída. O bot foi feito para tocar a música mesmo assim.
+Se persistir por dias, o caminho é outra hospedagem (VPS, PC próprio) ou um proxy de IP fixo.
+
 ## YouTube
 
 Links do YouTube costumam ser bloqueados em hospedagens como o Render (erro "confirme que você não é um bot").
