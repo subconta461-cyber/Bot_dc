@@ -1,5 +1,7 @@
-discord.py[voice]>=2.7.1
-davey
+# Versões fixadas de propósito: o davey 0.2.0 (nov/2026) deixa o áudio MUDO com o discord.py 2.7.1,
+# que ainda não faz as trocas de chave que o davey 0.2 exige. Só atualize quando o discord.py suportar o davey 0.2.
+discord.py[voice]==2.7.1
+davey>=0.1.7,<0.2
 yt-dlp
 python-dotenv>=1.0
 aiohttp>=3.9

@@ -579,6 +579,7 @@ class Music(commands.Cog):
         lines = [
             f"discord.py: {sources.package_version('discord.py')}",
             f"davey (DAVE): {sources.package_version('davey') or 'AUSENTE  <-- sem isso nao sai som'}",
+            *([f"⚠️ {sources.davey_problem()}"] if sources.davey_problem() else []),
             f"yt-dlp: {sources.YTDLP_VERSION}",
             f"FFmpeg: {ffmpeg or 'AUSENTE'}",
             f"Opus carregado: {'sim' if discord.opus.is_loaded() else 'NÃO'}",

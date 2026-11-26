@@ -62,6 +62,9 @@ class MusicBot(commands.Bot):
         await super().close()
 
     async def on_ready(self):
+        problem = sources.davey_problem()
+        if problem:
+            log.error("PROBLEMA DE VOZ: %s", problem)
         log.info("Conectado como %s | discord.py %s | davey %s | yt-dlp %s | opus %s",
                  self.user, sources.package_version("discord.py"), sources.package_version("davey") or "AUSENTE",
                  sources.YTDLP_VERSION, discord.opus.is_loaded())
@@ -97,9 +100,9 @@ def main():
     load_opus()
     dpy, davey = sources.package_version("discord.py"), sources.package_version("davey")
     log.info("discord.py %s | davey %s | yt-dlp %s", dpy, davey or "AUSENTE", sources.YTDLP_VERSION)
-    if not davey:
-        log.error("A biblioteca 'davey' (criptografia DAVE, exigida pelo Discord desde março/2026) NÃO está instalada. "
-                  "O bot entra na call mas o áudio não chega. Confira o requirements.txt e refaça o deploy.")
+    problem = sources.davey_problem()
+    if problem:
+        log.error("PROBLEMA DE VOZ: %s Refaça o deploy com 'Clear build cache'.", problem)
     intents = discord.Intents.default()
     intents.message_content = True
     prefix = os.getenv("PREFIX", "!").strip() or "!"

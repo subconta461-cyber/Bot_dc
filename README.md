@@ -50,6 +50,8 @@ A mensagem "Tocando agora" tem botões: ⏯️ pausar/retomar, ⏭️ pular, �
    na call, aparece "falando", mas ninguém ouve nada. No Render, use **Manual Deploy → Clear build cache & deploy**
    para garantir que as versões novas sejam instaladas. Nos Logs deve aparecer `discord.py 2.7.x | davey x.y.z`.
    Se aparecer `davey AUSENTE`, é esse o problema.
+   **Atenção:** o `davey` **0.2.0** (nov/2026) deixa o áudio mudo com o `discord.py 2.7.1`. Por isso o
+   `requirements.txt` fixa `davey>=0.1.7,<0.2`. O log deve mostrar `davey 0.1.7`.
 1. Use `/teste` dentro de um canal de voz: o bot toca um bipe de 4 segundos. Se você ouvir, a voz está ok e o problema
    é a música. Se não ouvir, o problema é a voz.
 2. Use `/diagnostico` no servidor. Ele mostra a versão do yt-dlp, se o FFmpeg e o Opus estão ok,

@@ -2,6 +2,7 @@
 import importlib.metadata
 import logging
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -64,6 +65,20 @@ def package_version(name):
         return importlib.metadata.version(name)
     except importlib.metadata.PackageNotFoundError:
         return None
+
+
+def _ver(text):
+    return tuple(int(x) for x in re.findall(r"\d+", text or "0")[:3])
+
+
+def davey_problem():
+    """Texto explicando o problema de voz/DAVE, ou None se as versões estão ok."""
+    dpy, dav = package_version("discord.py"), package_version("davey")
+    if not dav:
+        return "A biblioteca davey (criptografia de voz DAVE) não está instalada: o áudio não chega."
+    if _ver(dav) >= (0, 2) and _ver(dpy) <= (2, 7, 1):
+        return f"davey {dav} com discord.py {dpy} deixa o áudio mudo. Use davey>=0.1.7,<0.2 (veja o requirements.txt)."
+    return None
 
 
 def ffmpeg_path():
