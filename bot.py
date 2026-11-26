@@ -13,6 +13,9 @@ import sources
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("bot")
+if os.getenv("DEBUG_VOICE") == "1":  # logs detalhados da voz (inclui a negociação DAVE), só para diagnóstico
+    for _name in ("discord.voice_state", "discord.voice_client", "discord.player"):
+        logging.getLogger(_name).setLevel(logging.DEBUG)
 
 
 def load_opus():
@@ -59,7 +62,9 @@ class MusicBot(commands.Bot):
         await super().close()
 
     async def on_ready(self):
-        log.info("Conectado como %s (opus: %s).", self.user, discord.opus.is_loaded())
+        log.info("Conectado como %s | discord.py %s | davey %s | yt-dlp %s | opus %s",
+                 self.user, sources.package_version("discord.py"), sources.package_version("davey") or "AUSENTE",
+                 sources.YTDLP_VERSION, discord.opus.is_loaded())
 
     async def on_command_error(self, ctx, error):
         while getattr(error, "original", None) is not None:

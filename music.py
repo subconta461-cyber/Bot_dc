@@ -552,7 +552,10 @@ class Music(commands.Cog):
             tone = discord.FFmpegPCMAudio("sine=frequency=440:duration=4", executable=sources.ffmpeg_path() or "ffmpeg",
                                           before_options="-f lavfi", options="-vn")
             vc.play(discord.PCMVolumeTransformer(tone, volume=0.4), after=lambda e: loop.call_soon_threadsafe(done.set))
-            log.info("/teste: bipe iniciado no canal de voz.")
+            mode = getattr(vc, "mode", None) or getattr(getattr(vc, "_connection", None), "mode", None)
+            log.info("/teste: bipe iniciado | discord.py %s | davey %s | criptografia %s | latência %.0f ms",
+                     sources.package_version("discord.py"), sources.package_version("davey") or "AUSENTE",
+                     mode, (vc.latency or 0) * 1000)
             await safe(ctx.send("🔔 Tocando um bipe de 4 segundos. **Você ouviu?** "
                                 "Se não ouviu, o problema é a voz (não a música): rode `/diagnostico` e veja se o `davey` aparece."))
             await asyncio.wait_for(done.wait(), 15)

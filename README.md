@@ -82,6 +82,7 @@ Por isso a busca por nome usa o SoundCloud. Para buscar no YouTube mesmo assim, 
 | `IDLE_TIMEOUT` | `180` | Segundos sem música até o bot sair |
 | `MAX_QUEUE` | `100` | Tamanho máximo da fila |
 | `FFMPEG_PATH` | — | Caminho do FFmpeg (só se não estiver no PATH) |
+| `DEBUG_VOICE` | — | `1` liga logs detalhados da voz (só para diagnóstico) |
 | `SYNC_COMMANDS` | `1` | `0` para não sincronizar os comandos `/` ao iniciar |
 
 ## Rodar no PC (opcional)
