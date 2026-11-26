@@ -514,10 +514,37 @@ class Music(commands.Cog):
             f"`{p}shuffle` — embaralha a fila\n"
             f"`{p}remove <n>` — remove da fila\n"
             f"`{p}clear` — limpa a fila\n"
+            f"`{p}teste` — toca um bipe para testar a voz\n"
             f"`{p}diagnostico` — testa busca e FFmpeg (Gerenciar servidor)\n\n"
             "Todos também funcionam como comandos `/`."
         )
         await ctx.send(embed=e)
+
+    @commands.hybrid_command(name="teste", description="Toca um bipe de 4 segundos para testar se o áudio chega.")
+    async def teste(self, ctx):
+        channel = self.require_voice(ctx)
+        if ctx.guild.id in self.players:
+            await ctx.send("Use `!stop` antes, porque há música ativa.")
+            return
+        await ctx.defer()
+        vc = ctx.voice_client
+        try:
+            if vc is None:
+                vc = await channel.connect(self_deaf=True)
+            done = asyncio.Event()
+            loop = asyncio.get_running_loop()
+            tone = discord.FFmpegPCMAudio("sine=frequency=440:duration=4", executable=sources.ffmpeg_path() or "ffmpeg",
+                                          before_options="-f lavfi", options="-vn")
+            vc.play(discord.PCMVolumeTransformer(tone, volume=0.4), after=lambda e: loop.call_soon_threadsafe(done.set))
+            await ctx.send("🔔 Tocando um bipe de 4 segundos. **Você ouviu?** "
+                           "Se não ouviu, o problema é a voz (não a música): rode `/diagnostico` e veja se o `davey` aparece.")
+            await asyncio.wait_for(done.wait(), 15)
+        except Exception:
+            log.exception("Falha no /teste")
+            await ctx.send("⚠️ O teste falhou. Veja os logs do Render.")
+        finally:
+            if vc and vc.is_connected():
+                await vc.disconnect()
 
     @commands.hybrid_command(name="diagnostico", description="Testa a busca e o FFmpeg nesta hospedagem (Gerenciar servidor).")
     @app_commands.describe(busca="Música para testar (padrão: lofi hip hop)")
@@ -529,6 +556,8 @@ class Music(commands.Cog):
         ffmpeg = sources.ffmpeg_path()
         provider = os.getenv("SEARCH_PROVIDER", "soundcloud")
         lines = [
+            f"discord.py: {sources.package_version('discord.py')}",
+            f"davey (DAVE): {sources.package_version('davey') or 'AUSENTE  <-- sem isso nao sai som'}",
             f"yt-dlp: {sources.YTDLP_VERSION}",
             f"FFmpeg: {ffmpeg or 'AUSENTE'}",
             f"Opus carregado: {'sim' if discord.opus.is_loaded() else 'NÃO'}",

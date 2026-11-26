@@ -1,4 +1,5 @@
-discord.py[voice]>=2.4
+discord.py[voice]>=2.7.1
+davey
 yt-dlp
 python-dotenv>=1.0
 aiohttp>=3.9

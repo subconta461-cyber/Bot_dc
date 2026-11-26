@@ -19,7 +19,8 @@ Funcionam com `!` e também como comandos `/`.
 | `!shuffle` | Embaralha a fila |
 | `!remove <n>` | Remove uma música da fila |
 | `!clear` | Limpa a fila |
-| `!diagnostico` | Testa busca e FFmpeg (precisa de *Gerenciar servidor*) |
+| `!teste` | Toca um bipe de 4s para testar a voz |
+| `!diagnostico` | Testa versões, busca e FFmpeg (precisa de *Gerenciar servidor*) |
 
 A mensagem "Tocando agora" tem botões: ⏯️ pausar/retomar, ⏭️ pular, 🔁 loop, ⏹️ parar.
 
@@ -44,10 +45,17 @@ A mensagem "Tocando agora" tem botões: ⏯️ pausar/retomar, ⏭️ pular, �
 
 ## Se não sair som
 
-1. Use `/diagnostico` no servidor. Ele mostra a versão do yt-dlp, se o FFmpeg e o Opus estão ok,
+0. **DAVE (criptografia de voz):** desde março de 2026 o Discord exige DAVE nas chamadas. Isso precisa do
+   `discord.py` 2.7.1 ou mais novo **e** da biblioteca `davey` (já no `requirements.txt`). Sem elas, o bot entra
+   na call, aparece "falando", mas ninguém ouve nada. No Render, use **Manual Deploy → Clear build cache & deploy**
+   para garantir que as versões novas sejam instaladas. Nos Logs deve aparecer `discord.py 2.7.x | davey x.y.z`.
+   Se aparecer `davey AUSENTE`, é esse o problema.
+1. Use `/teste` dentro de um canal de voz: o bot toca um bipe de 4 segundos. Se você ouvir, a voz está ok e o problema
+   é a música. Se não ouvir, o problema é a voz.
+2. Use `/diagnostico` no servidor. Ele mostra a versão do yt-dlp, se o FFmpeg e o Opus estão ok,
    se a busca achou a música e se o FFmpeg consegue ler o áudio.
-2. Confira se o bot tem as permissões **Conectar** e **Falar** no canal de voz.
-3. Veja a aba **Logs** do Render logo depois de pedir a música. O bot tenta 3 formas de tocar
+3. Confira se o bot tem as permissões **Conectar** e **Falar** no canal de voz.
+4. Veja a aba **Logs** do Render logo depois de pedir a música. O bot tenta 3 formas de tocar
    (transmissão completa, transmissão simples e download) e registra qual falhou e por quê.
 
 ## YouTube

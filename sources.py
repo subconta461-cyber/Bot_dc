@@ -1,4 +1,5 @@
 """Busca e extração de áudio com yt-dlp (SoundCloud por padrão) + utilidades do FFmpeg."""
+import importlib.metadata
 import logging
 import os
 import shlex
@@ -56,6 +57,13 @@ def classify(error):
     if "timed out" in text or "timeout" in text:
         return AudioError("timeout", "A fonte demorou para responder. Tente de novo em instantes.")
     return AudioError("extract", "Não consegui obter o áudio dessa música. Tente outro nome ou um link público.")
+
+
+def package_version(name):
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        return None
 
 
 def ffmpeg_path():
